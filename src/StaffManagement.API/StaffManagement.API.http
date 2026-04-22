@@ -1,0 +1,6 @@
+@StaffManagementApi_HostAddress = http://localhost:5264
+
+GET {{StaffManagementApi_HostAddress}}/api/Staff/GetAll
+Accept: application/json
+
+###
