@@ -1,3 +1,4 @@
+using StaffManagement.API.Swagger;
 using StaffManagement.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,7 +15,10 @@ builder.Services.AddCors(options =>
             .AllowAnyMethod());
 });
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SchemaFilter<StaffDtoSchemaFilter>();
+});
 
 var app = builder.Build();
 

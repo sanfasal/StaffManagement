@@ -44,9 +44,21 @@ public class StaffRepository : IStaffRepository
             .ToListAsync();
     }
 
+    public async Task<bool> ExistsById(string id)
+    {
+        return await _context.Staff.AnyAsync(s => s.StaffId == id);
+    }
+
     public async Task<bool> Save(StaffDto staff)
     {
+        staff.Gender ??= 1;
+
         if (staff.Gender is not 1 and not 2)
+        {
+            return false;
+        }
+
+        if (await ExistsById(staff.StaffId))
         {
             return false;
         }
@@ -65,32 +77,26 @@ public class StaffRepository : IStaffRepository
         return true;
     }
 
-    public async Task<List<StaffDto>> Search(string? staffId, int? gender, int? startYear, int? endYear)
+    public async Task<List<StaffDto>> Search(StaffSearchFilterDto filter)
     {
         var query = _context.Staff.AsQueryable();
 
-        if (!string.IsNullOrWhiteSpace(staffId))
+        if (!string.IsNullOrWhiteSpace(filter.StaffId))
         {
-            query = query.Where(s => s.StaffId == staffId);
+            query = query.Where(s => s.StaffId == filter.StaffId);
         }
 
-        if (gender.HasValue)
+        if (filter.Gender.HasValue)
         {
-            query = query.Where(s => s.Gender == gender.Value);
+            query = query.Where(s => s.Gender == filter.Gender.Value);
         }
 
-        if (startYear.HasValue)
+        if (filter.StartYear.HasValue && filter.EndYear.HasValue)
         {
             query = query.Where(s =>
                 s.BirthDay.HasValue &&
-                s.BirthDay.Value.Year >= startYear.Value);
-        }
-
-        if (endYear.HasValue)
-        {
-            query = query.Where(s =>
-                s.BirthDay.HasValue &&
-                s.BirthDay.Value.Year <= endYear.Value);
+                s.BirthDay.Value.Year >= filter.StartYear.Value &&
+                s.BirthDay.Value.Year <= filter.EndYear.Value);
         }
 
         return await query
@@ -106,6 +112,13 @@ public class StaffRepository : IStaffRepository
 
     public async Task<bool> Update(StaffDto staff, string id)
     {
+        staff.Gender ??= 1;
+
+        if (staff.Gender is not 1 and not 2)
+        {
+            return false;
+        }
+
         var existing = await _context.Staff
             .FirstOrDefaultAsync(s => s.StaffId == id);
 

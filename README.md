@@ -13,17 +13,26 @@
 
 ## Business Rule
 
-When creating a new staff record:
+When creating or updating a staff record:
 
+- If `gender` is not provided, it defaults to `1`
 - `Gender = 1` means male
 - `Gender = 2` means female
-- Any other value, including `null`, is rejected
+- Any other value is rejected
+- `StaffId` must be unique when creating a new record
 
 If an invalid gender is submitted to `POST /api/Staff/Create`, the API returns:
 
 ```text
 400 Bad Request
 Gender must be 1 for male or 2 for female.
+```
+
+If a duplicate `StaffId` is submitted to `POST /api/Staff/Create`, the API returns:
+
+```text
+400 Bad Request
+StaffId already exists.
 ```
 
 ## Solution Structure
@@ -104,6 +113,24 @@ Fields:
 - `birthDay`: `DateOnly?`
 - `gender`: `int?`
 
+### StaffSearchFilterDto
+
+```json
+{
+  "staffId": "ST001",
+  "gender": 2,
+  "startYear": 1990,
+  "endYear": 2000
+}
+```
+
+Fields:
+
+- `staffId`: `string?`
+- `gender`: `int?`
+- `startYear`: `int?`
+- `endYear`: `int?`
+
 ## API Endpoints
 
 ### Get all staff
@@ -130,6 +157,8 @@ Example body:
 }
 ```
 
+If `gender` is omitted in the create request, the API saves it as `1`.
+
 Success response:
 
 ```text
@@ -142,6 +171,13 @@ Invalid gender response:
 ```text
 400 Bad Request
 Gender must be 1 for male or 2 for female.
+```
+
+Duplicate `StaffId` response:
+
+```text
+400 Bad Request
+StaffId already exists.
 ```
 
 ### Update staff
@@ -161,11 +197,20 @@ Example:
 }
 ```
 
+If `gender` is omitted in the update request, the API saves it as `1`.
+
 Success response:
 
 ```text
 200 OK
 Updated successfully
+```
+
+Invalid gender response:
+
+```text
+400 Bad Request
+Gender must be 1 for male or 2 for female.
 ```
 
 Not found response:
@@ -201,9 +246,10 @@ GET /api/Staff/Search?staffId=ST001&gender=2&startYear=1990&endYear=2000
 
 Notes:
 
+- Query parameters are bound into `StaffSearchFilterDto`
 - `staffId` uses exact match
 - `gender` filters by exact value
-- `startYear` and `endYear` filter by `BirthDay.Year`
+- `startYear` and `endYear` must be supplied together to filter by `BirthDay.Year`
 - records without `BirthDay` are excluded when year filters are used
 
 ## Run Unit Tests
@@ -216,7 +262,7 @@ The unit tests cover:
 
 - `StaffController` responses
 - `StaffRepository` create, update, delete, get all, and search logic
-- create validation for valid and invalid gender values
+- create and update validation for gender and duplicate `StaffId`
 
 ## Notes
 

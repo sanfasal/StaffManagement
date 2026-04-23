@@ -8,5 +8,5 @@ public class StaffDto
 
     public DateOnly? BirthDay { get; set; }
 
-    public int? Gender { get; set; }
+    public int? Gender { get; set; } 
 }
