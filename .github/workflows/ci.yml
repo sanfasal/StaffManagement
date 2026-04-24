@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+          cache: true
+          cache-dependency-path: |
+            **/packages.lock.json
+            **/*.csproj
+            NuGet.Config
+
+      - name: Restore
+        run: dotnet restore StaffManagement.sln --configfile NuGet.Config
+
+      - name: Build
+        run: dotnet build StaffManagement.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test tests/StaffManagement.UnitTests/StaffManagement.UnitTests.csproj --configuration Release --no-build --logger "trx;LogFileName=staffmanagement-tests.trx" --results-directory TestResults
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults
+          if-no-files-found: ignore

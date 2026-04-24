@@ -127,6 +127,17 @@ public class StaffRepositoryTests
     }
 
     [Fact]
+    public async Task ExistsById_ReturnsFalse_WhenStaffDoesNotExist()
+    {
+        await using var context = CreateContext();
+        var repository = new StaffRepository(context);
+
+        var result = await repository.ExistsById("ST404");
+
+        Assert.False(result);
+    }
+
+    [Fact]
     public async Task Save_ReturnsFalse_WhenStaffIdAlreadyExists()
     {
         await using var context = CreateContext();
@@ -212,6 +223,22 @@ public class StaffRepositoryTests
         var result = await repository.Search(new StaffSearchFilterDto());
 
         Assert.Equal(4, result.Count);
+    }
+
+    [Fact]
+    public async Task Search_FiltersByExactStaffId_WhenOnlyStaffIdIsProvided()
+    {
+        await using var context = CreateContext();
+        await SeedSearchData(context);
+        var repository = new StaffRepository(context);
+
+        var result = await repository.Search(new StaffSearchFilterDto
+        {
+            StaffId = "AB002",
+        });
+
+        var match = Assert.Single(result);
+        Assert.Equal("AB002", match.StaffId);
     }
 
     [Fact]

@@ -72,6 +72,33 @@ The API uses the connection string in [appsettings.json](C:\Users\USER\OneDrive 
 
 Update this value to match your local SQL Server before running the API.
 
+For local development, it is safer to keep your own machine-specific connection string in [appsettings.Development.json](C:\Users\USER\OneDrive - Royal University of Phnom Penh\Desktop\Testing\StaffManagement\src\StaffManagement.API\appsettings.Development.json) instead of editing the shared production-style value in `appsettings.json`.
+
+Example local development connection string:
+
+```json
+"ConnectionStrings": {
+  "CoffeeDbConnection": "Server=(localdb)\\MSSQLLocalDB;Database=StaffManagement;Trusted_Connection=True;TrustServerCertificate=True"
+}
+```
+
+## Database Setup For Other Developers
+
+If someone clones this repository and wants to test the API, they can create the database with the scripts in [database/init.sql](C:\Users\USER\OneDrive - Royal University of Phnom Penh\Desktop\Testing\StaffManagement\database\init.sql) and [database/seed.sql](C:\Users\USER\OneDrive - Royal University of Phnom Penh\Desktop\Testing\StaffManagement\database\seed.sql).
+
+Using `sqlcmd`:
+
+```powershell
+sqlcmd -S localhost -i database\init.sql
+sqlcmd -S localhost -i database\seed.sql
+```
+
+Or they can open both `.sql` files in SQL Server Management Studio and run them manually.
+
+After that, they only need to update `CoffeeDbConnection` in [appsettings.json](C:\Users\USER\OneDrive - Royal University of Phnom Penh\Desktop\Testing\StaffManagement\src\StaffManagement.API\appsettings.json) so it matches their own SQL Server instance.
+
+If they are running the API in development mode, they can put their own connection string in [appsettings.Development.json](C:\Users\USER\OneDrive - Royal University of Phnom Penh\Desktop\Testing\StaffManagement\src\StaffManagement.API\appsettings.Development.json) instead.
+
 ## Run the API
 
 From the repository root:
