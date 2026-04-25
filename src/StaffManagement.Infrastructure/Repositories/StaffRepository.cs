@@ -31,7 +31,7 @@ public class StaffRepository : IStaffRepository
         return true;
     }
 
-    public async Task<List<StaffDto>> GetAll(StaffFilterDto filter)
+    public async Task<StaffPagedResponseDto> GetAll(StaffFilterDto filter)
     {
         var query = _context.Staff.AsQueryable();
 
@@ -60,10 +60,13 @@ public class StaffRepository : IStaffRepository
             }
         }
 
+        // Get total count BEFORE pagination
+        var totalCount = await query.CountAsync();
+
         // Apply pagination
         var skip = (filter.Page - 1) * filter.PageSize;
 
-        return await query
+        var items = await query
             .Skip(skip)
             .Take(filter.PageSize)
             .Select(s => new StaffDto
@@ -77,6 +80,12 @@ public class StaffRepository : IStaffRepository
                 UpdatedDate = s.UpdatedDate
             })
             .ToListAsync();
+
+        return new StaffPagedResponseDto
+        {
+            Items = items,
+            TotalCount = totalCount
+        };
     }
 
     public async Task<bool> Save(CreateStaffDto staff)

@@ -145,12 +145,31 @@ Fields:
 GET /api/Staff/GetAll?page=1&pageSize=10&staffId=ST001
 ```
 
+Success response:
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "staffId": "ST001",
+      "fullName": "Alice",
+      "birthDay": "1998-05-12",
+      "gender": 2,
+      "createdDate": "2024-01-01T10:00:00Z",
+      "updatedDate": null
+    }
+  ],
+  "totalCount": 1
+}
+```
+
 Notes:
 - Query parameters are bound into `StaffFilterDto`
 - `staffId` uses exact match
 - `gender` filters by exact value
 - `startYear` and `endYear` filter by `BirthDay.Year`
 - `page` and `pageSize` handle pagination
+- Returns `items` (list of staff) and `totalCount` (total matching records in database)
 
 ### Create staff
 
