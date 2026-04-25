@@ -16,14 +16,14 @@ public class StaffController : ControllerBase
     }
 
     [HttpGet("GetAll")]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll([FromQuery] StaffFilterDto filter)
     {
-        var staff = await _staffRepository.GetAll();
+        var staff = await _staffRepository.GetAll(filter);
         return Ok(staff);
     }
 
     [HttpPost("Create")]
-    public async Task<IActionResult> Create([FromBody] StaffDto model)
+    public async Task<IActionResult> Create([FromBody] CreateStaffDto model)
     {
         model.Gender ??= 1;
 
@@ -32,23 +32,20 @@ public class StaffController : ControllerBase
             return BadRequest("Gender must be 1 for male or 2 for female.");
         }
 
-        if (await _staffRepository.ExistsById(model.StaffId))
+        try
         {
-            return BadRequest("StaffId already exists.");
+            var result = await _staffRepository.Save(model);
+            return Ok("Staff created successfully.");
         }
-
-        var result = await _staffRepository.Save(model);
-
-        if (!result)
+        catch (Exception ex)
         {
-            return BadRequest("Unable to create staff record.");
+            // Returns the real error so we can diagnose the root cause
+            return BadRequest(new { error = "Unable to create staff record.", detail = ex.InnerException?.Message ?? ex.Message });
         }
-
-        return Ok(result);
     }
 
     [HttpPut("Update/{id}")]
-    public async Task<IActionResult> Update(string id, [FromBody] StaffDto model)
+    public async Task<IActionResult> Update(int id, [FromBody] StaffDto model)
     {
         model.Gender ??= 1;
 
@@ -68,7 +65,7 @@ public class StaffController : ControllerBase
     }
 
     [HttpDelete("Delete/{id}")]
-    public async Task<IActionResult> Delete(string id)
+    public async Task<IActionResult> Delete(int id)
     {
         var result = await _staffRepository.Delete(id);
 
@@ -78,17 +75,5 @@ public class StaffController : ControllerBase
         }
 
         return Ok("Deleted successfully");
-    }
-
-    [HttpGet("Search")]
-    public async Task<IActionResult> Search([FromQuery] StaffSearchFilterDto filter)
-    {
-        if (filter.StartYear.HasValue != filter.EndYear.HasValue)
-        {
-            return BadRequest("StartYear and EndYear must both be provided.");
-        }
-
-        var result = await _staffRepository.Search(filter);
-        return Ok(result);
     }
 }

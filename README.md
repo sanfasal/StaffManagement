@@ -5,13 +5,13 @@
 ## Features
 
 - Create a staff record
-- Get all staff records
+- Get all staff records (with pagination)
 - Update an existing staff record
 - Delete a staff record
-- Search staff by `StaffId`, `Gender`, `startYear`, and `endYear`
+- Search staff by `StaffId`, `Gender`, `StartYear`, and `EndYear`
 - Unit tests for controller and repository logic
 
-## Business Rule
+## Business Rules
 
 When creating or updating a staff record:
 
@@ -19,50 +19,48 @@ When creating or updating a staff record:
 - `Gender = 1` means male
 - `Gender = 2` means female
 - Any other value is rejected
-- `StaffId` must be unique when creating a new record
 
-If an invalid gender is submitted to `POST /api/Staff/Create`, the API returns:
+If an invalid gender is submitted to `POST /api/Staff/Create` or `PUT /api/Staff/Update/{id}`, the API returns:
 
 ```text
 400 Bad Request
 Gender must be 1 for male or 2 for female.
 ```
 
-If a duplicate `StaffId` is submitted to `POST /api/Staff/Create`, the API returns:
+## Database Schema (SQL Script)
 
-```text
-400 Bad Request
-StaffId already exists.
+If you are setting up the project for the first time, you can create the database and table using the following SQL script:
+
+```sql
+CREATE DATABASE [StaffManagement];
+GO
+
+USE [StaffManagement]
+GO
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Staff](
+	[Id] [int] IDENTITY(1,1) NOT NULL,
+	[StaffID] [nvarchar](50) NULL,
+	[FullName] [nvarchar](100) NULL,
+	[BirthDay] [date] NULL,
+	[Gender] [int] NULL,
+	[CreatedDate] [datetime] NOT NULL,
+	[UpdatedDate] [datetime] NULL,
+ CONSTRAINT [PK_Staff] PRIMARY KEY CLUSTERED 
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
 ```
-
-## Solution Structure
-
-```text
-src/
-  StaffManagement.API
-  StaffManagement.Application
-  StaffManagement.Domain
-  StaffManagement.Infrastructure
-tests/
-  StaffManagement.UnitTests
-```
-
-## Technologies
-
-- .NET 8
-- ASP.NET Core Web API
-- Entity Framework Core
-- SQL Server
-- xUnit
-
-## Prerequisites
-
-- .NET 8 SDK
-- SQL Server
 
 ## Database Configuration
 
-The API uses the connection string in [appsettings.json](C:\Users\USER\OneDrive - Royal University of Phnom Penh\Desktop\Testing\StaffManagement\src\StaffManagement.API\appsettings.json):
+The API uses the connection string in `appsettings.json`:
 
 ```json
 "ConnectionStrings": {
@@ -70,34 +68,13 @@ The API uses the connection string in [appsettings.json](C:\Users\USER\OneDrive 
 }
 ```
 
-Update this value to match your local SQL Server before running the API.
-
-For local development, it is safer to keep your own machine-specific connection string in [appsettings.Development.json](C:\Users\USER\OneDrive - Royal University of Phnom Penh\Desktop\Testing\StaffManagement\src\StaffManagement.API\appsettings.Development.json) instead of editing the shared production-style value in `appsettings.json`.
-
-Example local development connection string:
+Update this value to match your local SQL Server before running the API. For local development, you can override this in `appsettings.Development.json`:
 
 ```json
 "ConnectionStrings": {
   "CoffeeDbConnection": "Server=(localdb)\\MSSQLLocalDB;Database=StaffManagement;Trusted_Connection=True;TrustServerCertificate=True"
 }
 ```
-
-## Database Setup For Other Developers
-
-If someone clones this repository and wants to test the API, they can create the database with the scripts in [database/init.sql](C:\Users\USER\OneDrive - Royal University of Phnom Penh\Desktop\Testing\StaffManagement\database\init.sql) and [database/seed.sql](C:\Users\USER\OneDrive - Royal University of Phnom Penh\Desktop\Testing\StaffManagement\database\seed.sql).
-
-Using `sqlcmd`:
-
-```powershell
-sqlcmd -S localhost -i database\init.sql
-sqlcmd -S localhost -i database\seed.sql
-```
-
-Or they can open both `.sql` files in SQL Server Management Studio and run them manually.
-
-After that, they only need to update `CoffeeDbConnection` in [appsettings.json](C:\Users\USER\OneDrive - Royal University of Phnom Penh\Desktop\Testing\StaffManagement\src\StaffManagement.API\appsettings.json) so it matches their own SQL Server instance.
-
-If they are running the API in development mode, they can put their own connection string in [appsettings.Development.json](C:\Users\USER\OneDrive - Royal University of Phnom Penh\Desktop\Testing\StaffManagement\src\StaffManagement.API\appsettings.Development.json) instead.
 
 ## Run the API
 
@@ -112,99 +89,81 @@ Swagger is enabled in development mode.
 
 ## CORS
 
-The API allows requests from:
-
-```text
-http://localhost:3000
-```
-
-This is configured for a React frontend.
+The API allows requests from: `http://localhost:3000` (Configured for a React frontend).
 
 ## Data Model
 
-### StaffDto
+### StaffDto (Response / Update Model)
 
 ```json
 {
+  "id": 1,
   "staffId": "ST001",
   "fullName": "Alice",
   "birthDay": "1998-05-12",
-  "gender": 2
+  "gender": 2,
+  "createdDate": "2024-01-01T10:00:00Z",
+  "updatedDate": null
 }
 ```
 
 Fields:
-
-- `staffId`: string
-- `fullName`: string
+- `id`: `int` (Primary Key in DB)
+- `staffId`: `string?`
+- `fullName`: `string?`
 - `birthDay`: `DateOnly?`
 - `gender`: `int?`
+- `createdDate`: `DateTime?`
+- `updatedDate`: `DateTime?`
 
-### StaffSearchFilterDto
+### StaffFilterDto (Query Model)
 
 ```json
 {
   "staffId": "ST001",
   "gender": 2,
   "startYear": 1990,
-  "endYear": 2000
+  "endYear": 2000,
+  "page": 1,
+  "pageSize": 10
 }
 ```
 
 Fields:
-
 - `staffId`: `string?`
 - `gender`: `int?`
 - `startYear`: `int?`
 - `endYear`: `int?`
+- `page`: `int` (default: 1)
+- `pageSize`: `int` (default: 10)
 
 ## API Endpoints
 
-### Get all staff
+### Get all staff (with search and pagination)
 
 ```http
-GET /api/Staff/GetAll
+GET /api/Staff/GetAll?page=1&pageSize=10&staffId=ST001
 ```
+
+Notes:
+- Query parameters are bound into `StaffFilterDto`
+- `staffId` uses exact match
+- `gender` filters by exact value
+- `startYear` and `endYear` filter by `BirthDay.Year`
+- `page` and `pageSize` handle pagination
 
 ### Create staff
 
 ```http
 POST /api/Staff/Create
 Content-Type: application/json
-```
 
-Example body:
-
-```json
 {
   "staffId": "ST001",
   "fullName": "Alice",
   "birthDay": "1998-05-12",
   "gender": 2
 }
-```
-
-If `gender` is omitted in the create request, the API saves it as `1`.
-
-Success response:
-
-```text
-200 OK
-true
-```
-
-Invalid gender response:
-
-```text
-400 Bad Request
-Gender must be 1 for male or 2 for female.
-```
-
-Duplicate `StaffId` response:
-
-```text
-400 Bad Request
-StaffId already exists.
 ```
 
 ### Update staff
@@ -212,39 +171,16 @@ StaffId already exists.
 ```http
 PUT /api/Staff/Update/{id}
 Content-Type: application/json
-```
 
-Example:
-
-```json
 {
+  "staffId": "ST001",
   "fullName": "Alice Updated",
   "birthDay": "1999-06-10",
   "gender": 1
 }
 ```
 
-If `gender` is omitted in the update request, the API saves it as `1`.
-
-Success response:
-
-```text
-200 OK
-Updated successfully
-```
-
-Invalid gender response:
-
-```text
-400 Bad Request
-Gender must be 1 for male or 2 for female.
-```
-
-Not found response:
-
-```text
-404 Not Found
-```
+*Note: The `{id}` in the URL corresponds to the primary key `Id` (integer), not the `StaffId` string.*
 
 ### Delete staff
 
@@ -252,46 +188,4 @@ Not found response:
 DELETE /api/Staff/Delete/{id}
 ```
 
-Success response:
-
-```text
-200 OK
-Deleted successfully
-```
-
-Not found response:
-
-```text
-404 Not Found
-```
-
-### Search staff
-
-```http
-GET /api/Staff/Search?staffId=ST001&gender=2&startYear=1990&endYear=2000
-```
-
-Notes:
-
-- Query parameters are bound into `StaffSearchFilterDto`
-- `staffId` uses exact match
-- `gender` filters by exact value
-- `startYear` and `endYear` must be supplied together to filter by `BirthDay.Year`
-- records without `BirthDay` are excluded when year filters are used
-
-## Run Unit Tests
-
-```powershell
-dotnet test tests\StaffManagement.UnitTests\StaffManagement.UnitTests.csproj
-```
-
-The unit tests cover:
-
-- `StaffController` responses
-- `StaffRepository` create, update, delete, get all, and search logic
-- create and update validation for gender and duplicate `StaffId`
-
-## Notes
-
-- The repository currently uses the `CoffeeDbConnection` key name for the staff database connection string.
-- The search logic uses exact `StaffId` matching, not partial matching.
+*Note: The `{id}` in the URL corresponds to the primary key `Id` (integer).*

@@ -19,6 +19,7 @@ builder.Services.AddSwaggerGen(options =>
 {
     options.SchemaFilter<StaffDtoSchemaFilter>();
 });
+builder.Services.AddApplicationInsightsTelemetry();
 
 var app = builder.Build();
 

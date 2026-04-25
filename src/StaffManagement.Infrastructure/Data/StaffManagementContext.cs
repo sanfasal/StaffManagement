@@ -16,8 +16,8 @@ public class StaffManagementContext : DbContext
     {
         modelBuilder.Entity<Staff>(entity =>
         {
-            entity.HasKey(e => e.StaffId);
-            entity.Property(e => e.StaffId).HasMaxLength(8);
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.StaffId).HasMaxLength(50);
             entity.Property(e => e.FullName).HasMaxLength(100);
         });
     }
