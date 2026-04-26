@@ -10,426 +10,256 @@ namespace StaffManagement.UnitTests;
 public class StaffRepositoryTests
 {
     [Fact]
-    public async Task GetAll_ReturnsMappedStaffDtos()
+    public async Task GetAll_ReturnsPagedResult_WithTotalCount()
     {
         await using var context = CreateContext();
-        context.Staff.Add(new Staff
+        await SeedData(context);
+        var repository = new StaffRepository(context);
+
+        var result = await repository.GetAll(new StaffFilterDto
         {
-            StaffId = "ST001",
-            FullName = "Alice",
+            Page = 1,
+            PageSize = 10,
+        });
+
+        Assert.Equal(4, result.TotalCount);
+        Assert.Equal(4, result.Items.Count);
+    }
+
+    [Fact]
+    public async Task GetAll_FiltersByStaffId()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var repository = new StaffRepository(context);
+
+        var result = await repository.GetAll(new StaffFilterDto
+        {
+            StaffId = "AB002",
+            Page = 1,
+            PageSize = 10,
+        });
+
+        var match = Assert.Single(result.Items);
+        Assert.Equal("AB002", match.StaffId);
+        Assert.Equal(1, result.TotalCount);
+    }
+
+    [Fact]
+    public async Task GetAll_IgnoresWhitespaceStaffIdFilter()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var repository = new StaffRepository(context);
+
+        var result = await repository.GetAll(new StaffFilterDto
+        {
+            StaffId = "   ",
+            Page = 1,
+            PageSize = 10,
+        });
+
+        Assert.Equal(4, result.TotalCount);
+        Assert.Equal(4, result.Items.Count);
+    }
+
+    [Fact]
+    public async Task GetAll_FiltersByGender()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var repository = new StaffRepository(context);
+
+        var result = await repository.GetAll(new StaffFilterDto
+        {
             Gender = 2,
-            BirthDay = new DateOnly(1998, 5, 12),
+            Page = 1,
+            PageSize = 10,
         });
-        await context.SaveChangesAsync();
 
-        var repository = new StaffRepository(context);
-
-        var result = await repository.GetAll();
-
-        var staff = Assert.Single(result);
-        Assert.Equal("ST001", staff.StaffId);
-        Assert.Equal("Alice", staff.FullName);
-        Assert.Equal(2, staff.Gender);
+        Assert.Equal(2, result.TotalCount);
+        Assert.Equal(2, result.Items.Count);
+        Assert.All(result.Items, staff => Assert.Equal(2, staff.Gender));
     }
 
     [Fact]
-    public async Task Save_ReturnsFalse_WhenGenderIsOutsideSupportedRange()
+    public async Task GetAll_FiltersByYearRange_IncludingBoundaries()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var repository = new StaffRepository(context);
+
+        var result = await repository.GetAll(new StaffFilterDto
+        {
+            StartYear = 1998,
+            EndYear = 2001,
+            Page = 1,
+            PageSize = 10,
+        });
+
+        Assert.Equal(2, result.TotalCount);
+        Assert.Contains(result.Items, staff => staff.StaffId == "ST001");
+        Assert.Contains(result.Items, staff => staff.StaffId == "AB002");
+    }
+
+    [Fact]
+    public async Task GetAll_ExcludesRecordsWithoutBirthDay_WhenYearFilterProvided()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var repository = new StaffRepository(context);
+
+        var result = await repository.GetAll(new StaffFilterDto
+        {
+            StartYear = 1990,
+            Page = 1,
+            PageSize = 10,
+        });
+
+        Assert.Equal(2, result.TotalCount);
+        Assert.DoesNotContain(result.Items, staff => staff.StaffId == "ST004");
+    }
+
+    [Fact]
+    public async Task GetAll_AppliesPagination_AfterFiltering()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var repository = new StaffRepository(context);
+
+        var result = await repository.GetAll(new StaffFilterDto
+        {
+            Page = 2,
+            PageSize = 2,
+        });
+
+        Assert.Equal(4, result.TotalCount);
+        Assert.Equal(2, result.Items.Count);
+    }
+
+    [Fact]
+    public async Task Save_CreatesStaff_AndDefaultsGenderToOne_WhenGenderIsNull()
     {
         await using var context = CreateContext();
         var repository = new StaffRepository(context);
 
-        var result = await repository.Save(new StaffDto
+        var before = DateTime.UtcNow.AddSeconds(-1);
+        var result = await repository.Save(new CreateStaffDto
         {
-            StaffId = "ST001",
-            FullName = "Alice",
-            Gender = 9,
-        });
-
-        Assert.False(result);
-        Assert.Empty(context.Staff);
-    }
-
-    [Fact]
-    public async Task Save_DefaultsGenderToOne_WhenGenderIsNull()
-    {
-        await using var context = CreateContext();
-        var repository = new StaffRepository(context);
-
-        var result = await repository.Save(new StaffDto
-        {
-            StaffId = "ST002",
-            FullName = "Bob",
+            StaffId = "ST010",
+            FullName = "New User",
             BirthDay = new DateOnly(2000, 1, 1),
             Gender = null,
         });
+        var after = DateTime.UtcNow.AddSeconds(1);
 
         Assert.True(result);
-
         var saved = await context.Staff.SingleAsync();
+        Assert.Equal("ST010", saved.StaffId);
+        Assert.Equal("New User", saved.FullName);
+        Assert.Equal(new DateOnly(2000, 1, 1), saved.BirthDay);
         Assert.Equal(1, saved.Gender);
+        Assert.True(saved.CreatedDate >= before && saved.CreatedDate <= after);
     }
 
     [Fact]
-    public async Task Save_CreatesStaff_WhenGenderIsOne()
+    public async Task Save_UsesProvidedGender()
     {
         await using var context = CreateContext();
         var repository = new StaffRepository(context);
 
-        var result = await repository.Save(new StaffDto
+        var result = await repository.Save(new CreateStaffDto
         {
-            StaffId = "ST003",
-            FullName = "Carol",
-            Gender = 1,
-        });
-
-        Assert.True(result);
-
-        var saved = await context.Staff.SingleAsync();
-        Assert.Equal(1, saved.Gender);
-    }
-
-    [Fact]
-    public async Task Save_CreatesStaff_WhenGenderIsTwo()
-    {
-        await using var context = CreateContext();
-        var repository = new StaffRepository(context);
-
-        var result = await repository.Save(new StaffDto
-        {
-            StaffId = "ST004",
-            FullName = "Dana",
+            StaffId = "ST011",
+            FullName = "Gender Two",
             Gender = 2,
         });
 
         Assert.True(result);
-
         var saved = await context.Staff.SingleAsync();
         Assert.Equal(2, saved.Gender);
     }
 
     [Fact]
-    public async Task ExistsById_ReturnsTrue_WhenStaffExists()
+    public async Task Update_ReturnsFalse_WhenRecordDoesNotExist()
     {
         await using var context = CreateContext();
-        context.Staff.Add(new Staff
+        var repository = new StaffRepository(context);
+
+        var result = await repository.Update(new StaffDto
         {
-            StaffId = "ST001",
-            FullName = "Alice",
+            StaffId = "MISSING",
+            FullName = "Missing User",
+            Gender = 1,
+        }, 999);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public async Task Update_ChangesFields_AndSetsUpdatedDate()
+    {
+        await using var context = CreateContext();
+        var existing = new Staff
+        {
+            StaffId = "ST020",
+            FullName = "Original",
+            BirthDay = new DateOnly(1998, 5, 12),
             Gender = 2,
-        });
+            CreatedDate = DateTime.UtcNow.AddDays(-1),
+        };
+        context.Staff.Add(existing);
         await context.SaveChangesAsync();
 
         var repository = new StaffRepository(context);
-
-        var result = await repository.ExistsById("ST001");
+        var before = DateTime.UtcNow.AddSeconds(-1);
+        var result = await repository.Update(new StaffDto
+        {
+            StaffId = "ST020-UPD",
+            FullName = "Updated Name",
+            BirthDay = null,
+            Gender = null,
+        }, existing.Id);
+        var after = DateTime.UtcNow.AddSeconds(1);
 
         Assert.True(result);
+        var updated = await context.Staff.SingleAsync();
+        Assert.Equal("ST020-UPD", updated.StaffId);
+        Assert.Equal("Updated Name", updated.FullName);
+        Assert.Null(updated.BirthDay);
+        Assert.Null(updated.Gender);
+        Assert.True(updated.UpdatedDate >= before && updated.UpdatedDate <= after);
     }
 
     [Fact]
-    public async Task ExistsById_ReturnsFalse_WhenStaffDoesNotExist()
+    public async Task Delete_ReturnsFalse_WhenRecordDoesNotExist()
     {
         await using var context = CreateContext();
         var repository = new StaffRepository(context);
 
-        var result = await repository.ExistsById("ST404");
+        var result = await repository.Delete(12345);
 
         Assert.False(result);
     }
 
     [Fact]
-    public async Task Save_ReturnsFalse_WhenStaffIdAlreadyExists()
+    public async Task Delete_RemovesRecord_WhenIdExists()
     {
         await using var context = CreateContext();
-        context.Staff.Add(new Staff
+        var existing = new Staff
         {
-            StaffId = "ST001",
-            FullName = "Alice",
-            Gender = 2,
-        });
-        await context.SaveChangesAsync();
-
-        var repository = new StaffRepository(context);
-
-        var result = await repository.Save(new StaffDto
-        {
-            StaffId = "ST001",
-            FullName = "Duplicate Alice",
+            StaffId = "ST030",
+            FullName = "Delete Me",
             Gender = 1,
-        });
-
-        Assert.False(result);
-        Assert.Equal(1, await context.Staff.CountAsync());
-    }
-
-    [Fact]
-    public async Task Delete_RemovesExistingStaff_AndReturnsTrue()
-    {
-        await using var context = CreateContext();
-        context.Staff.Add(new Staff
-        {
-            StaffId = "ST001",
-            FullName = "Alice",
-            Gender = 2,
-        });
+        };
+        context.Staff.Add(existing);
         await context.SaveChangesAsync();
-
         var repository = new StaffRepository(context);
 
-        var result = await repository.Delete("ST001");
+        var result = await repository.Delete(existing.Id);
 
         Assert.True(result);
         Assert.Empty(context.Staff);
-    }
-
-    [Fact]
-    public async Task Delete_ReturnsFalse_WhenStaffDoesNotExist()
-    {
-        await using var context = CreateContext();
-        var repository = new StaffRepository(context);
-
-        var result = await repository.Delete("ST404");
-
-        Assert.False(result);
-    }
-
-    [Fact]
-    public async Task Search_AppliesAllProvidedFilters()
-    {
-        await using var context = CreateContext();
-        await SeedSearchData(context);
-
-        var repository = new StaffRepository(context);
-
-        var result = await repository.Search(new StaffSearchFilterDto
-        {
-            StaffId = "ST001",
-            Gender = 2,
-            StartYear = 1990,
-            EndYear = 2000,
-        });
-
-        var match = Assert.Single(result);
-        Assert.Equal("ST001", match.StaffId);
-    }
-
-    [Fact]
-    public async Task Search_ReturnsAllStaff_WhenNoFiltersAreProvided()
-    {
-        await using var context = CreateContext();
-        await SeedSearchData(context);
-        var repository = new StaffRepository(context);
-
-        var result = await repository.Search(new StaffSearchFilterDto());
-
-        Assert.Equal(4, result.Count);
-    }
-
-    [Fact]
-    public async Task Search_FiltersByExactStaffId_WhenOnlyStaffIdIsProvided()
-    {
-        await using var context = CreateContext();
-        await SeedSearchData(context);
-        var repository = new StaffRepository(context);
-
-        var result = await repository.Search(new StaffSearchFilterDto
-        {
-            StaffId = "AB002",
-        });
-
-        var match = Assert.Single(result);
-        Assert.Equal("AB002", match.StaffId);
-    }
-
-    [Fact]
-    public async Task Search_IgnoresWhitespaceStaffId_Filter()
-    {
-        await using var context = CreateContext();
-        await SeedSearchData(context);
-        var repository = new StaffRepository(context);
-
-        var result = await repository.Search(new StaffSearchFilterDto
-        {
-            StaffId = "   ",
-            Gender = 2,
-        });
-
-        Assert.Equal(2, result.Count);
-        Assert.All(result, staff => Assert.Equal(2, staff.Gender));
-    }
-
-    [Fact]
-    public async Task Search_ExcludesStaffWithoutBirthDay_WhenYearFiltersAreUsed()
-    {
-        await using var context = CreateContext();
-        await SeedSearchData(context);
-        var repository = new StaffRepository(context);
-
-        var result = await repository.Search(new StaffSearchFilterDto
-        {
-            StartYear = 1990,
-            EndYear = 2005,
-        });
-
-        Assert.Equal(2, result.Count);
-        Assert.DoesNotContain(result, staff => staff.StaffId == "ST004");
-    }
-
-    [Fact]
-    public async Task Search_DoesNotApplyYearFilter_WhenOnlyStartYearIsProvided()
-    {
-        await using var context = CreateContext();
-        await SeedSearchData(context);
-        var repository = new StaffRepository(context);
-
-        var result = await repository.Search(new StaffSearchFilterDto
-        {
-            StartYear = 1998,
-        });
-
-        Assert.Equal(4, result.Count);
-    }
-
-    [Fact]
-    public async Task Search_DoesNotApplyYearFilter_WhenOnlyEndYearIsProvided()
-    {
-        await using var context = CreateContext();
-        await SeedSearchData(context);
-        var repository = new StaffRepository(context);
-
-        var result = await repository.Search(new StaffSearchFilterDto
-        {
-            EndYear = 1998,
-        });
-
-        Assert.Equal(4, result.Count);
-    }
-
-    [Fact]
-    public async Task Search_UsesInclusiveYearBoundaries()
-    {
-        await using var context = CreateContext();
-        await SeedSearchData(context);
-        var repository = new StaffRepository(context);
-
-        var result = await repository.Search(new StaffSearchFilterDto
-        {
-            StartYear = 1998,
-            EndYear = 2001,
-        });
-
-        Assert.Equal(2, result.Count);
-        Assert.Contains(result, staff => staff.StaffId == "ST001");
-        Assert.Contains(result, staff => staff.StaffId == "AB002");
-    }
-
-    [Fact]
-    public async Task Update_ChangesExistingStaff_AndReturnsTrue()
-    {
-        await using var context = CreateContext();
-        context.Staff.Add(new Staff
-        {
-            StaffId = "ST001",
-            FullName = "Alice",
-            Gender = 2,
-            BirthDay = new DateOnly(1998, 5, 12),
-        });
-        await context.SaveChangesAsync();
-
-        var repository = new StaffRepository(context);
-
-        var result = await repository.Update(
-            new StaffDto
-            {
-                FullName = "Alice Updated",
-                Gender = 1,
-                BirthDay = new DateOnly(1999, 6, 10),
-            },
-            "ST001");
-
-        Assert.True(result);
-
-        var updated = await context.Staff.SingleAsync();
-        Assert.Equal("Alice Updated", updated.FullName);
-        Assert.Equal(1, updated.Gender);
-        Assert.Equal(new DateOnly(1999, 6, 10), updated.BirthDay);
-    }
-
-    [Fact]
-    public async Task Update_ReturnsFalse_WhenStaffDoesNotExist()
-    {
-        await using var context = CreateContext();
-        var repository = new StaffRepository(context);
-
-        var result = await repository.Update(
-            new StaffDto
-            {
-                FullName = "Missing",
-            },
-            "ST404");
-
-        Assert.False(result);
-    }
-
-    [Fact]
-    public async Task Update_DefaultsGenderToOne_WhenGenderIsNull()
-    {
-        await using var context = CreateContext();
-        context.Staff.Add(new Staff
-        {
-            StaffId = "ST001",
-            FullName = "Alice",
-            Gender = 2,
-            BirthDay = new DateOnly(1998, 5, 12),
-        });
-        await context.SaveChangesAsync();
-
-        var repository = new StaffRepository(context);
-
-        var result = await repository.Update(
-            new StaffDto
-            {
-                FullName = "Alice Updated",
-                Gender = null,
-                BirthDay = null,
-            },
-            "ST001");
-
-        Assert.True(result);
-
-        var updated = await context.Staff.SingleAsync();
-        Assert.Equal(1, updated.Gender);
-        Assert.Null(updated.BirthDay);
-        Assert.Equal("ST001", updated.StaffId);
-    }
-
-    [Fact]
-    public async Task Update_ReturnsFalse_WhenGenderIsOutsideSupportedRange()
-    {
-        await using var context = CreateContext();
-        context.Staff.Add(new Staff
-        {
-            StaffId = "ST001",
-            FullName = "Alice",
-            Gender = 2,
-        });
-        await context.SaveChangesAsync();
-
-        var repository = new StaffRepository(context);
-
-        var result = await repository.Update(
-            new StaffDto
-            {
-                FullName = "Alice Updated",
-                Gender = 9,
-            },
-            "ST001");
-
-        Assert.False(result);
-
-        var unchanged = await context.Staff.SingleAsync();
-        Assert.Equal(2, unchanged.Gender);
-        Assert.Equal("Alice", unchanged.FullName);
     }
 
     private static StaffManagementContext CreateContext()
@@ -441,7 +271,7 @@ public class StaffRepositoryTests
         return new StaffManagementContext(options);
     }
 
-    private static async Task SeedSearchData(StaffManagementContext context)
+    private static async Task SeedData(StaffManagementContext context)
     {
         context.Staff.AddRange(
             new Staff

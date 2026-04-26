@@ -11,67 +11,64 @@ public class StaffControllerTests
     [Fact]
     public async Task GetAll_ReturnsOkWithRepositoryData()
     {
-        var expected = new List<StaffDto>
-        {
-            new()
-            {
-                StaffId = "ST001",
-                FullName = "Alice",
-                Gender = 2,
-            },
-        };
         var repository = new FakeStaffRepository
         {
-            GetAllResult = expected,
+            GetAllResult = new StaffPagedResponseDto
+            {
+                Items =
+                [
+                    new StaffDto
+                    {
+                        Id = 1,
+                        StaffId = "ST001",
+                        FullName = "Alice",
+                        Gender = 2,
+                    },
+                ],
+                TotalCount = 1,
+            },
         };
         var controller = new StaffController(repository);
+        var filter = new StaffFilterDto
+        {
+            StaffId = "ST001",
+            Page = 2,
+            PageSize = 5,
+        };
 
-        var result = await controller.GetAll();
+        var result = await controller.GetAll(filter);
 
         var okResult = Assert.IsType<OkObjectResult>(result);
-        var payload = Assert.IsType<List<StaffDto>>(okResult.Value);
-        var staff = Assert.Single(payload);
-        Assert.Equal("ST001", staff.StaffId);
+        var payload = Assert.IsType<StaffPagedResponseDto>(okResult.Value);
+        Assert.Single(payload.Items);
+        Assert.Equal(1, payload.TotalCount);
+        Assert.NotNull(repository.GetAllFilter);
+        Assert.Equal("ST001", repository.GetAllFilter.StaffId);
+        Assert.Equal(2, repository.GetAllFilter.Page);
+        Assert.Equal(5, repository.GetAllFilter.PageSize);
     }
 
     [Fact]
-    public async Task Create_ReturnsOkWithRepositoryResult()
+    public async Task Create_ReturnsOk_WhenRepositorySaveSucceeds()
     {
         var repository = new FakeStaffRepository
         {
             SaveResult = true,
         };
         var controller = new StaffController(repository);
-        var request = new StaffDto
+
+        var result = await controller.Create(new CreateStaffDto
         {
             StaffId = "ST001",
             FullName = "Test User",
+            BirthDay = new DateOnly(2000, 1, 1),
             Gender = 2,
-        };
-
-        var result = await controller.Create(request);
-
-        var okResult = Assert.IsType<OkObjectResult>(result);
-        Assert.True(Assert.IsType<bool>(okResult.Value));
-        Assert.Equal(request.StaffId, repository.SavedStaff?.StaffId);
-    }
-
-    [Fact]
-    public async Task Create_ReturnsBadRequest_WhenGenderIsInvalid()
-    {
-        var repository = new FakeStaffRepository();
-        var controller = new StaffController(repository);
-
-        var result = await controller.Create(new StaffDto
-        {
-            StaffId = "ST002",
-            FullName = "Rejected User",
-            Gender = 9,
         });
 
-        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
-        Assert.Equal("Gender must be 1 for male or 2 for female.", badRequest.Value);
-        Assert.Equal(0, repository.SaveCallCount);
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        Assert.Equal("Staff created successfully.", okResult.Value);
+        Assert.Equal(1, repository.SaveCallCount);
+        Assert.Equal(2, repository.SavedStaff?.Gender);
     }
 
     [Fact]
@@ -83,43 +80,39 @@ public class StaffControllerTests
         };
         var controller = new StaffController(repository);
 
-        var result = await controller.Create(new StaffDto
+        var result = await controller.Create(new CreateStaffDto
         {
-            StaffId = "ST010",
+            StaffId = "ST002",
             FullName = "Default Gender User",
             BirthDay = new DateOnly(2001, 2, 3),
             Gender = null,
         });
 
         var okResult = Assert.IsType<OkObjectResult>(result);
-        Assert.True(Assert.IsType<bool>(okResult.Value));
+        Assert.Equal("Staff created successfully.", okResult.Value);
         Assert.Equal(1, repository.SavedStaff?.Gender);
     }
 
     [Fact]
-    public async Task Create_ReturnsBadRequest_WhenStaffIdAlreadyExists()
+    public async Task Create_ReturnsBadRequest_WhenGenderIsInvalid()
     {
-        var repository = new FakeStaffRepository
-        {
-            ExistsByIdResult = true,
-        };
+        var repository = new FakeStaffRepository();
         var controller = new StaffController(repository);
 
-        var result = await controller.Create(new StaffDto
+        var result = await controller.Create(new CreateStaffDto
         {
-            StaffId = "ST001",
-            FullName = "Duplicate User",
-            Gender = 1,
+            StaffId = "ST003",
+            FullName = "Rejected User",
+            Gender = 9,
         });
 
         var badRequest = Assert.IsType<BadRequestObjectResult>(result);
-        Assert.Equal("StaffId already exists.", badRequest.Value);
+        Assert.Equal("Gender must be 1 for male or 2 for female.", badRequest.Value);
         Assert.Equal(0, repository.SaveCallCount);
-        Assert.Equal("ST001", repository.ExistingIdLookup);
     }
 
     [Fact]
-    public async Task Create_ReturnsBadRequest_WhenRepositoryRejectsCreate()
+    public async Task Create_ReturnsOk_EvenWhenRepositoryReturnsFalse()
     {
         var repository = new FakeStaffRepository
         {
@@ -127,33 +120,43 @@ public class StaffControllerTests
         };
         var controller = new StaffController(repository);
 
-        var result = await controller.Create(new StaffDto
+        var result = await controller.Create(new CreateStaffDto
         {
-            StaffId = "ST002",
-            FullName = "Rejected User",
-            BirthDay = new DateOnly(2000, 1, 1),
+            StaffId = "ST004",
+            FullName = "Still Ok User",
+            Gender = 1,
+        });
+
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        Assert.Equal("Staff created successfully.", okResult.Value);
+        Assert.Equal(1, repository.SaveCallCount);
+    }
+
+    [Fact]
+    public async Task Create_ReturnsBadRequestWithErrorPayload_WhenRepositoryThrows()
+    {
+        var repository = new FakeStaffRepository
+        {
+            SaveException = new InvalidOperationException("outer", new Exception("inner-db")),
+        };
+        var controller = new StaffController(repository);
+
+        var result = await controller.Create(new CreateStaffDto
+        {
+            StaffId = "ST005",
+            FullName = "Error User",
             Gender = 1,
         });
 
         var badRequest = Assert.IsType<BadRequestObjectResult>(result);
-        Assert.Equal("Unable to create staff record.", badRequest.Value);
-        Assert.Equal("ST002", repository.SavedStaff?.StaffId);
-        Assert.Equal(new DateOnly(2000, 1, 1), repository.SavedStaff?.BirthDay);
-    }
+        Assert.NotNull(badRequest.Value);
 
+        var valueType = badRequest.Value!.GetType();
+        var error = valueType.GetProperty("error")?.GetValue(badRequest.Value) as string;
+        var detail = valueType.GetProperty("detail")?.GetValue(badRequest.Value) as string;
 
-    [Fact]
-    public async Task Update_ReturnsNotFound_WhenRepositoryDoesNotFindRecord()
-    {
-        var repository = new FakeStaffRepository
-        {
-            UpdateResult = false,
-        };
-        var controller = new StaffController(repository);
-
-        var result = await controller.Update("ST404", new StaffDto());
-
-        Assert.IsType<NotFoundResult>(result);
+        Assert.Equal("Unable to create staff record.", error);
+        Assert.Equal("inner-db", detail);
     }
 
     [Fact]
@@ -165,28 +168,17 @@ public class StaffControllerTests
         };
         var controller = new StaffController(repository);
 
-        var result = await controller.Update("ST001", new StaffDto { FullName = "Updated User" });
+        var result = await controller.Update(7, new StaffDto
+        {
+            StaffId = "ST007",
+            FullName = "Updated User",
+            Gender = 2,
+        });
 
         var okResult = Assert.IsType<OkObjectResult>(result);
         Assert.Equal("Updated successfully", okResult.Value);
-        Assert.Equal("ST001", repository.UpdatedId);
-    }
-
-    [Fact]
-    public async Task Update_ReturnsBadRequest_WhenGenderIsInvalid()
-    {
-        var repository = new FakeStaffRepository();
-        var controller = new StaffController(repository);
-
-        var result = await controller.Update("ST001", new StaffDto
-        {
-            FullName = "Updated User",
-            Gender = 9,
-        });
-
-        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
-        Assert.Equal("Gender must be 1 for male or 2 for female.", badRequest.Value);
-        Assert.Null(repository.UpdatedId);
+        Assert.Equal(7, repository.UpdatedId);
+        Assert.Equal(2, repository.UpdatedStaff?.Gender);
     }
 
     [Fact]
@@ -198,30 +190,48 @@ public class StaffControllerTests
         };
         var controller = new StaffController(repository);
 
-        var result = await controller.Update("ST001", new StaffDto
+        var result = await controller.Update(8, new StaffDto
         {
+            StaffId = "ST008",
             FullName = "Updated User",
             Gender = null,
         });
 
         var okResult = Assert.IsType<OkObjectResult>(result);
         Assert.Equal("Updated successfully", okResult.Value);
-        Assert.Equal("ST001", repository.UpdatedId);
         Assert.Equal(1, repository.UpdatedStaff?.Gender);
     }
 
     [Fact]
-    public async Task Delete_ReturnsNotFound_WhenRepositoryDoesNotFindRecord()
+    public async Task Update_ReturnsBadRequest_WhenGenderIsInvalid()
+    {
+        var repository = new FakeStaffRepository();
+        var controller = new StaffController(repository);
+
+        var result = await controller.Update(9, new StaffDto
+        {
+            FullName = "Updated User",
+            Gender = 9,
+        });
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Equal("Gender must be 1 for male or 2 for female.", badRequest.Value);
+        Assert.Null(repository.UpdatedStaff);
+    }
+
+    [Fact]
+    public async Task Update_ReturnsNotFound_WhenRepositoryDoesNotFindRecord()
     {
         var repository = new FakeStaffRepository
         {
-            DeleteResult = false,
+            UpdateResult = false,
         };
         var controller = new StaffController(repository);
 
-        var result = await controller.Delete("ST404");
+        var result = await controller.Update(404, new StaffDto());
 
         Assert.IsType<NotFoundResult>(result);
+        Assert.Equal(404, repository.UpdatedId);
     }
 
     [Fact]
@@ -233,146 +243,78 @@ public class StaffControllerTests
         };
         var controller = new StaffController(repository);
 
-        var result = await controller.Delete("ST001");
+        var result = await controller.Delete(5);
 
         var okResult = Assert.IsType<OkObjectResult>(result);
         Assert.Equal("Deleted successfully", okResult.Value);
-        Assert.Equal("ST001", repository.DeletedId);
+        Assert.Equal(5, repository.DeletedId);
     }
 
     [Fact]
-    public async Task Search_ReturnsOkWithRepositoryData()
-    {
-        var expected = new List<StaffDto>
-        {
-            new()
-            {
-                StaffId = "ST001",
-                FullName = "Alice",
-                Gender = 2,
-            },
-        };
-        var repository = new FakeStaffRepository
-        {
-            SearchResult = expected,
-        };
-        var controller = new StaffController(repository);
-        var filter = new StaffSearchFilterDto
-        {
-            StaffId = "ST001",
-            Gender = 2,
-            StartYear = 1990,
-            EndYear = 2000,
-        };
-
-        var result = await controller.Search(filter);
-
-        var okResult = Assert.IsType<OkObjectResult>(result);
-        var payload = Assert.IsType<List<StaffDto>>(okResult.Value);
-        var staff = Assert.Single(payload);
-        Assert.Equal("ST001", staff.StaffId);
-        Assert.NotNull(repository.SearchFilter);
-        Assert.Equal("ST001", repository.SearchFilter.StaffId);
-        Assert.Equal(2, repository.SearchFilter.Gender);
-        Assert.Equal(1990, repository.SearchFilter.StartYear);
-        Assert.Equal(2000, repository.SearchFilter.EndYear);
-    }
-
-    [Fact]
-    public async Task Search_ForwardsNullFilters_ToRepository()
+    public async Task Delete_ReturnsNotFound_WhenRepositoryDoesNotFindRecord()
     {
         var repository = new FakeStaffRepository
         {
-            SearchResult = [],
+            DeleteResult = false,
         };
         var controller = new StaffController(repository);
 
-        var result = await controller.Search(new StaffSearchFilterDto());
+        var result = await controller.Delete(404);
 
-        var okResult = Assert.IsType<OkObjectResult>(result);
-        Assert.IsType<List<StaffDto>>(okResult.Value);
-        Assert.NotNull(repository.SearchFilter);
-        Assert.Null(repository.SearchFilter.StaffId);
-        Assert.Null(repository.SearchFilter.Gender);
-        Assert.Null(repository.SearchFilter.StartYear);
-        Assert.Null(repository.SearchFilter.EndYear);
-    }
-
-    [Fact]
-    public async Task Search_ReturnsBadRequest_WhenOnlyOneYearBoundaryIsProvided()
-    {
-        var repository = new FakeStaffRepository();
-        var controller = new StaffController(repository);
-
-        var result = await controller.Search(new StaffSearchFilterDto
-        {
-            StartYear = 1990,
-        });
-
-        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
-        Assert.Equal("StartYear and EndYear must both be provided.", badRequest.Value);
-        Assert.Null(repository.SearchFilter);
+        Assert.IsType<NotFoundResult>(result);
+        Assert.Equal(404, repository.DeletedId);
     }
 
     private sealed class FakeStaffRepository : IStaffRepository
     {
-        public List<StaffDto> GetAllResult { get; set; } = [];
+        public StaffPagedResponseDto GetAllResult { get; set; } = new();
 
-        public bool SaveResult { get; set; }
-
-        public bool ExistsByIdResult { get; set; }
+        public bool SaveResult { get; set; } = true;
 
         public bool UpdateResult { get; set; } = true;
 
         public bool DeleteResult { get; set; } = true;
 
-        public List<StaffDto> SearchResult { get; set; } = [];
+        public Exception? SaveException { get; set; }
 
-        public StaffDto? SavedStaff { get; private set; }
+        public StaffFilterDto? GetAllFilter { get; private set; }
+
+        public CreateStaffDto? SavedStaff { get; private set; }
 
         public int SaveCallCount { get; private set; }
 
-        public string? UpdatedId { get; private set; }
+        public int? UpdatedId { get; private set; }
 
         public StaffDto? UpdatedStaff { get; private set; }
 
-        public string? DeletedId { get; private set; }
+        public int? DeletedId { get; private set; }
 
-        public StaffSearchFilterDto? SearchFilter { get; private set; }
-
-        public string? ExistingIdLookup { get; private set; }
-
-        public Task<bool> Delete(string id)
+        public Task<bool> Delete(int id)
         {
             DeletedId = id;
             return Task.FromResult(DeleteResult);
         }
 
-        public Task<List<StaffDto>> GetAll()
+        public Task<StaffPagedResponseDto> GetAll(StaffFilterDto filter)
         {
+            GetAllFilter = filter;
             return Task.FromResult(GetAllResult);
         }
 
-        public Task<bool> ExistsById(string id)
-        {
-            ExistingIdLookup = id;
-            return Task.FromResult(ExistsByIdResult);
-        }
-
-        public Task<bool> Save(StaffDto staff)
+        public Task<bool> Save(CreateStaffDto staff)
         {
             SaveCallCount++;
             SavedStaff = staff;
+
+            if (SaveException is not null)
+            {
+                throw SaveException;
+            }
+
             return Task.FromResult(SaveResult);
         }
 
-        public Task<List<StaffDto>> Search(StaffSearchFilterDto filter)
-        {
-            SearchFilter = filter;
-            return Task.FromResult(SearchResult);
-        }
-
-        public Task<bool> Update(StaffDto staff, string id)
+        public Task<bool> Update(StaffDto staff, int id)
         {
             UpdatedId = id;
             UpdatedStaff = staff;
